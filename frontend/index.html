@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FlashMsg // Self-Destruct Protocol</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>FlashMsg<span class="cursor">_</span></h1>
+            <p class="subtitle">SECURE. EPHEMERAL. GONE.</p>
+        </header>
+
+        <!-- WRITER VIEW -->
+        <main id="writer-view">
+            <div class="panel">
+                <div class="panel-header">>> ENCRYPT_MESSAGE</div>
+                <textarea id="secret-text" placeholder="Enter your top secret info here..."></textarea>
+                <button id="create-btn" onclick="createSecret()">INITIATE_PROTOCOL</button>
+            </div>
+            <div id="result-area" class="hidden">
+                <p>>> SECRET_GENERATED_SUCCESSFULLY</p>
+                <p>Share this secure link. It will self-destruct after one view.</p>
+                <div class="link-box">
+                    <input type="text" id="secret-link" readonly>
+                    <button onclick="copyLink()">COPY</button>
+                </div>
+            </div>
+        </main>
+
+        <!-- READER VIEW -->
+        <main id="reader-view" class="hidden">
+            <div class="warning-panel">
+                <h2>⚠ WARNING ⚠</h2>
+                <p>You are about to access a classified document.</p>
+                <p>Reading this message will trigger the <strong>IMMEDIATE DESTRUCTION</strong> of the source data.</p>
+                <p>There is no turning back.</p>
+                <button id="reveal-btn" class="danger-btn" onclick="revealSecret()">ACKNOWLEDGE & VIEW</button>
+            </div>
+            <div id="message-display" class="hidden">
+                <div class="panel-header">>> DECRYPTED_CONTENT</div>
+                <pre id="secret-content"></pre>
+                <p class="status-msg">>> DATA_WIPED_FROM_SERVER</p>
+            </div>
+        </main>
+
+        <!-- ERROR VIEW -->
+        <main id="error-view" class="hidden">
+            <div class="error-panel">
+                <h2>ERROR 404</h2>
+                <p id="error-msg">Message not found or has already been destroyed.</p>
+                <button onclick="window.location.href = window.location.pathname">CREATE_NEW</button>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // ==========================================
+        // CONFIGURATION: UPDATE AFTER TERRAFORM DEPLOY
+        // ==========================================
+        const API_URL = "__API_URL__";
+        // This will be replaced by the CI/CD pipeline
+        // ==========================================
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const secretId = urlParams.get('secret');
+
+        const writerView = document.getElementById('writer-view');
+        const readerView = document.getElementById('reader-view');
+        const errorView = document.getElementById('error-view');
+
+        // Init
+        if (secretId) {
+            writerView.classList.add('hidden');
+            readerView.classList.remove('hidden');
+        } else {
+            writerView.classList.remove('hidden');
+            readerView.classList.add('hidden');
+        }
+
+        async function createSecret() {
+            const text = document.getElementById('secret-text').value;
+            if (!text) return alert("Input empty.");
+
+            const btn = document.getElementById('create-btn');
+            btn.innerText = "ENCRYPTING...";
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(`${API_URL}/create`, {
+                    method: 'POST',
+                    body: JSON.stringify({ text: text }),
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await res.json();
+
+                if (res.ok) {
+                    document.getElementById('result-area').classList.remove('hidden');
+                    const link = `${window.location.origin}${window.location.pathname}?secret=${data.id}`;
+                    document.getElementById('secret-link').value = link;
+                } else {
+                    alert("Error: " + data.error);
+                }
+            } catch (e) {
+                alert("Connection failed. Check API_URL configuration.");
+                console.error(e);
+            } finally {
+                btn.innerText = "INITIATE_PROTOCOL";
+                btn.disabled = false;
+            }
+        }
+
+        async function revealSecret() {
+            const btn = document.getElementById('reveal-btn');
+            btn.innerText = "DECRYPTING...";
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(`${API_URL}/read/${secretId}`);
+                const data = await res.json();
+
+                if (res.ok) {
+                    document.querySelector('.warning-panel').classList.add('hidden');
+                    document.getElementById('message-display').classList.remove('hidden');
+                    document.getElementById('secret-content').innerText = data.message;
+                } else {
+                    readerView.classList.add('hidden');
+                    errorView.classList.remove('hidden');
+                    document.getElementById('error-msg').innerText = data.error || "Message gone.";
+                }
+            } catch (e) {
+                alert("Connection failed.");
+            }
+        }
+
+        function copyLink() {
+            const copyText = document.getElementById("secret-link");
+            copyText.select();
+            document.execCommand("copy");
+
+            // Visual feedback instead of alert
+            const btn = document.querySelector('.link-box button');
+            const originalText = btn.innerText;
+            btn.innerText = "LINK COPIED!";
+            btn.style.backgroundColor = "var(--primary-color)";
+            btn.style.color = "#000";
+
+            setTimeout(() => {
+                btn.innerText = originalText;
+                btn.style.backgroundColor = ""; // Revert to CSS default
+                btn.style.color = "";
+            }, 2000);
+        }
+    </script>
+</body>
+
+</html>

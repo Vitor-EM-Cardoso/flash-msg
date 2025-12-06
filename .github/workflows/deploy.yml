@@ -1,0 +1,83 @@
+name: Deploy FlashMsg
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-infra:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    outputs:
+      api_url: ${{ steps.tf-output.outputs.api_url }}
+      frontend_bucket: ${{ steps.tf-output.outputs.frontend_bucket }}
+      cloudfront_id: ${{ steps.tf-output.outputs.cloudfront_id }}
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        working-directory: ./terraform
+        run: terraform init
+
+      - name: Terraform Apply
+        working-directory: ./terraform
+        run: terraform apply -auto-approve
+
+      - name: Export Terraform Outputs
+        id: tf-output
+        working-directory: ./terraform
+        run: |
+          api_url=$(terraform output -raw api_url)
+          # Base64 encode to avoid GH Actions masking/blocking the output if it contains secrets (like AWS region)
+          api_url_base64=$(echo -n "$api_url" | base64 -w 0)
+          echo "api_url=$api_url_base64" >> $GITHUB_OUTPUT
+          
+          echo "frontend_bucket=$(terraform output -raw frontend_bucket_name)" >> $GITHUB_OUTPUT
+          echo "cloudfront_id=$(terraform output -raw cloudfront_distribution_id)" >> $GITHUB_OUTPUT
+
+  deploy-frontend:
+    name: Deploy Frontend
+    needs: deploy-infra
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Inject API URL
+        run: |
+          api_url=$(echo "${{ needs.deploy-infra.outputs.api_url }}" | base64 --decode)
+          sed -i "s|__API_URL__|$api_url|g" frontend/index.html
+
+      - name: Sync to S3
+        run: |
+          aws s3 sync ./frontend s3://${{ needs.deploy-infra.outputs.frontend_bucket }} --delete
+
+      - name: Invalidate CloudFront Cache
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${{ needs.deploy-infra.outputs.cloudfront_id }} --paths "/*"

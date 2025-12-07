@@ -20,3 +20,4 @@ aws_credentials
 .DS_Store
 Thumbs.db
 .gemini/
+*.zip

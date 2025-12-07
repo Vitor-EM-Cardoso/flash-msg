@@ -67,7 +67,8 @@
                 "iam:ListAttachedRolePolicies",
                 "iam:ListPolicyVersions",
                 "iam:GetPolicyVersion",
-                "iam:ListInstanceProfilesForRole"
+                "iam:ListInstanceProfilesForRole",
+                "iam:ListPolicies"
             ],
             "Resource": "*"
         },
@@ -144,7 +145,8 @@
                 "cloudfront:DeleteOriginAccessControl",
                 "cloudfront:ListTagsForResource",
                 "cloudfront:GetDistributionConfig",
-                "cloudfront:CreateInvalidation"
+                "cloudfront:CreateInvalidation",
+                "cloudfront:ListOriginAccessControls"
             ],
             "Resource": "*"
         }

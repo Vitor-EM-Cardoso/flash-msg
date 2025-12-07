@@ -146,7 +146,8 @@
                 "cloudfront:ListTagsForResource",
                 "cloudfront:GetDistributionConfig",
                 "cloudfront:CreateInvalidation",
-                "cloudfront:ListOriginAccessControls"
+                "cloudfront:ListOriginAccessControls",
+                "cloudfront:ListDistributions"
             ],
             "Resource": "*"
         }
